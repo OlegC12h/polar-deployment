@@ -3,6 +3,8 @@ services:
 
   catalog-service:
     depends_on:
+      - fluent-bit
+      - polar-keycloak
       - polar-postgres
     image: "catalog-service"
     container_name: "catalog-service"
@@ -16,6 +18,11 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://polar-postgres:5432/polardb_catalog
       - SPRING_CLOUD_CONFIG_URI=http://config-service:8888
       - SPRING_PROFILES_ACTIVE=testdata
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://host.docker.internal:8080/realms/PolarBookshop
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: 127.0.0.1:24224
 
   order-service:
     depends_on:
@@ -89,3 +96,36 @@ services:
       - 9004:9004
     environment:
       - PORT=9004
+
+  grafana:
+    image: grafana/grafana:9.1.2
+    container_name: grafana
+    depends_on:
+      - loki
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=user
+      - GF_SECURITY_ADMIN_PASSWORD=password
+    volumes:
+      - /C/Projects/sandbox/polar-deployment/docker/observability/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - /C/Projects/sandbox/polar-deployment/docker/observability/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - /C/Projects/sandbox/polar-deployment/docker/observability/grafana/grafana.ini:/etc/grafana/grafana.ini
+
+  loki:
+    image: grafana/loki:2.6.1
+    container_name: loki
+    depends_on:
+      - fluent-bit
+    ports:
+      - "3100:3100"
+
+  fluent-bit:
+    image: grafana/fluent-bit-plugin-loki:2.6.1-amd64
+    container_name: fluent-bit
+    ports:
+      - "24224:24224"
+    environment:
+      - LOKI_URL=http://loki:3100/loki/api/v1/push
+    volumes:
+      - /C/Projects/sandbox/polar-deployment/docker/observability/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
